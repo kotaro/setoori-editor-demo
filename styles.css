@@ -251,6 +251,7 @@ button{font-family:inherit;color:inherit}
 /* ===== 右プロパティ ===== */
 .props{flex:0 0 286px;background:var(--surface);border-left:1px solid var(--line);overflow-y:auto;padding:18px 16px 30px}
 .props-empty{display:flex;flex-direction:column;align-items:center;text-align:center;color:var(--ink-faint);padding:48px 18px;gap:6px}
+.props-empty[hidden]{display:none}
 .props-empty p{font-size:14px;font-weight:600;color:var(--ink-soft);margin:8px 0 0}
 .props-empty span{font-size:11.5px;line-height:1.7}
 .props-empty svg{color:var(--line)}
@@ -301,6 +302,7 @@ button{font-family:inherit;color:inherit}
 
 /* ===== モーダル ===== */
 .modal-back{position:fixed;inset:0;background:rgba(30,26,20,.46);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:100;padding:24px}
+.modal-back[hidden]{display:none}
 .modal{background:var(--surface);border-radius:18px;box-shadow:var(--shadow-lg);width:min(520px,100%);max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
 .preview-modal{width:min(720px,100%)}
 .modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line)}
