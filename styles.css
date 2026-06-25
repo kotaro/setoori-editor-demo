@@ -73,13 +73,19 @@ button{font-family:inherit;color:inherit}
   color:var(--ink);cursor:pointer;transition:all .15s;
 }
 .text-btn:hover{border-color:var(--accent);color:var(--accent-deep);box-shadow:var(--shadow-sm)}
-.text-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-.text-btn.primary:hover{background:var(--accent-deep);border-color:var(--accent-deep);color:#fff}
+.text-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(176,133,68,.28)}
+.text-btn.primary:hover{background:var(--accent-deep);border-color:var(--accent-deep);color:#fff;box-shadow:0 3px 12px rgba(176,133,68,.36)}
 
 .poc-strip{
-  flex:0 0 auto;font-size:11px;color:var(--ink-faint);
-  background:var(--surface-2);border-bottom:1px solid var(--line-soft);
-  padding:5px 18px;text-align:center;letter-spacing:.01em;
+  flex:0 0 auto;font-size:11px;color:var(--ink-soft);
+  background:linear-gradient(180deg,var(--accent-soft),var(--surface-2));
+  border-bottom:1px solid var(--line-soft);
+  padding:6px 18px;text-align:center;letter-spacing:.01em;
+  display:flex;align-items:center;justify-content:center;gap:9px;
+}
+.poc-strip::before{
+  content:"PoC";flex:0 0 auto;font-size:9.5px;font-weight:800;letter-spacing:.1em;
+  color:#fff;background:var(--accent-deep);border-radius:5px;padding:2px 7px;
 }
 
 /* ===== ワークスペース ===== */
@@ -139,9 +145,10 @@ button{font-family:inherit;color:inherit}
   position:relative;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;cursor:pointer;
   background:var(--surface-2);transition:all .16s;
 }
-.tpl-card:hover{border-color:var(--accent);box-shadow:var(--shadow-md);transform:translateY(-2px)}
-.tpl-thumb{height:96px;display:flex;align-items:center;justify-content:center;padding:8px;background:
-  radial-gradient(circle at 50% 35%, #fbfaf6, #f0ede5)}
+.tpl-card:hover{border-color:var(--accent);box-shadow:var(--shadow-md);transform:translateY(-3px)}
+.tpl-thumb{height:96px;display:flex;align-items:center;justify-content:center;padding:10px;background:
+  radial-gradient(circle at 50% 30%, #fcfbf7, #edeae1);box-shadow:inset 0 0 0 1px rgba(40,36,28,.04),inset 0 -10px 16px -12px rgba(40,36,28,.12)}
+.tpl-thumb svg{filter:drop-shadow(0 1px 1px rgba(40,36,28,.10))}
 .tpl-name{font-size:11px;padding:7px 9px;border-top:1px solid var(--line-soft);color:var(--ink);background:var(--surface);font-weight:600;line-height:1.3}
 .tpl-name small{display:block;font-size:9.5px;color:var(--ink-faint);font-weight:500;margin-top:1px}
 /* ホバー時の適用オーバーレイ */
@@ -151,8 +158,9 @@ button{font-family:inherit;color:inherit}
 }
 .tpl-card:hover .tpl-overlay{opacity:1}
 .tpl-use{
-  background:var(--accent);color:#fff;font-size:11px;font-weight:700;
-  padding:7px 13px;border-radius:20px;box-shadow:var(--shadow-md);letter-spacing:.02em;
+  background:var(--accent);color:#fff;font-size:10.5px;font-weight:700;
+  padding:7px 11px;border-radius:20px;box-shadow:var(--shadow-md);letter-spacing:.01em;
+  white-space:nowrap;
 }
 
 /* 追加ボタン群 */
@@ -226,7 +234,10 @@ button{font-family:inherit;color:inherit}
   position:relative;
 }
 .stage-inner{flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;padding:40px}
-.canvas-shell{position:relative;box-shadow:var(--shadow-lg);border-radius:4px;transition:width .12s,height .12s}
+.canvas-shell{position:relative;box-shadow:var(--shadow-lg);border-radius:4px;transition:width .18s cubic-bezier(.4,0,.2,1),height .18s cubic-bezier(.4,0,.2,1)}
+/* テンプレ・AI 展開時のさりげない反映演出(控えめに上品に) */
+.canvas-shell.flash{animation:shellFlash .42s ease}
+@keyframes shellFlash{0%{transform:scale(.985);opacity:.6}100%{transform:scale(1);opacity:1}}
 .canvas-shell .canvas-container{border-radius:4px}
 .texture-overlay{position:absolute;inset:0;pointer-events:none;border-radius:4px;z-index:5;mix-blend-mode:multiply}
 .stage-foot{
@@ -435,8 +446,9 @@ button{font-family:inherit;color:inherit}
 }
 .ai-cand:hover{border-color:var(--accent);box-shadow:var(--shadow-md);transform:translateY(-2px)}
 .ai-cand.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
-.ai-cand-thumb{height:84px;display:flex;align-items:center;justify-content:center;padding:7px;background:
-  radial-gradient(circle at 50% 35%, #fbfaf6, #f0ede5)}
+.ai-cand-thumb{height:84px;display:flex;align-items:center;justify-content:center;padding:8px;background:
+  radial-gradient(circle at 50% 30%, #fcfbf7, #edeae1);box-shadow:inset 0 0 0 1px rgba(40,36,28,.04),inset 0 -8px 14px -12px rgba(40,36,28,.12)}
+.ai-cand-thumb svg{filter:drop-shadow(0 1px 1px rgba(40,36,28,.10))}
 .ai-cand-meta{font-size:11px;padding:6px 8px;border-top:1px solid var(--line-soft);color:var(--ink);background:var(--surface);font-weight:600}
 .ai-cand-meta small{display:block;font-size:9px;color:var(--ink-faint);font-weight:500;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
@@ -452,6 +464,10 @@ button{font-family:inherit;color:inherit}
   width:min(420px,100%);padding:26px 26px 20px;animation:obPop .26s ease;
 }
 @keyframes obPop{from{transform:translateY(12px);opacity:0}to{transform:translateY(0);opacity:1}}
+.onboard-card .ob-ic{
+  width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  background:var(--accent-soft);color:var(--accent-deep);margin-bottom:14px;
+}
 .onboard-card .ob-step{font-size:11px;font-weight:700;color:var(--accent-deep);letter-spacing:.08em}
 .onboard-card .ob-title{font-family:"Shippori Mincho",serif;font-size:19px;font-weight:700;margin:8px 0 8px}
 .onboard-card .ob-desc{font-size:13px;color:var(--ink-soft);line-height:1.8;margin:0 0 16px}
@@ -470,13 +486,18 @@ button{font-family:inherit;color:inherit}
 
 /* 狭幅レスポンシブの追補(主要操作の破綻防止) */
 @media(max-width:760px){
-  .topbar{gap:10px;padding:0 12px;overflow-x:auto}
+  .topbar{gap:8px;padding:0 12px;overflow-x:auto}
   .brand{min-width:0}
   .brand-text small{display:none}
   .text-btn{padding:8px 11px}
-  .nav-link span,.text-btn span{}
   .rail-panel{flex-basis:220px}
   .props{flex-basis:220px}
+}
+/* 狭幅では補助アクションはアイコンのみ(主要 CTA「入稿する」は文字を残す) */
+@media(max-width:680px){
+  .text-btn{padding:8px;gap:0}
+  .text-btn:not(.primary) .btn-label{display:none}
+  .text-btn.primary{padding:8px 12px}
 }
 @media(max-width:600px){
   .workspace{flex-direction:column}

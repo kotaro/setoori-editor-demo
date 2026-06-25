@@ -323,6 +323,20 @@ function initCanvas(){
     backgroundColor: "transparent",
     selection: true,
   });
+  // 選択ハンドル・枠の見た目をブランド色で上品に統一(触り心地の質感)
+  try {
+    const ACC = "#b08544";
+    fabric.Object.prototype.set({
+      transparentCorners: false,
+      cornerColor: "#ffffff",
+      cornerStrokeColor: ACC,
+      cornerStyle: "circle",
+      cornerSize: 10,
+      borderColor: ACC,
+      borderScaleFactor: 1.4,
+      padding: 2,
+    });
+  } catch(e){ /* スタイル設定失敗は致命的でないため無視 */ }
   canvas.on("object:modified", pushHistory);
   canvas.on("object:added", () => { if(!suppressHistory) pushHistory(); });
   canvas.on("object:removed", () => { if(!suppressHistory) pushHistory(); });
@@ -624,7 +638,7 @@ function railTemplates(){
   let cards = visible.map(({t,i})=>{
     return `<div class="tpl-card" data-tpl="${i}" title="${esc(t.name)} を使う">
       <div class="tpl-thumb">${t.thumb}</div>
-      <div class="tpl-overlay"><span class="tpl-use">このテンプレートを使う</span></div>
+      <div class="tpl-overlay"><span class="tpl-use">このデザインを使う</span></div>
       <div class="tpl-name">${esc(t.name)}<small>${esc(t.category||"")}</small></div>
     </div>`;
   }).join("");
@@ -671,7 +685,7 @@ function refreshTplResults(){
       grid.innerHTML = visible.map(({t,i})=>
         `<div class="tpl-card" data-tpl="${i}" title="${esc(t.name)} を使う">
           <div class="tpl-thumb">${t.thumb}</div>
-          <div class="tpl-overlay"><span class="tpl-use">このテンプレートを使う</span></div>
+          <div class="tpl-overlay"><span class="tpl-use">このデザインを使う</span></div>
           <div class="tpl-name">${esc(t.name)}<small>${esc(t.category||"")}</small></div>
         </div>`).join("");
     }
@@ -1433,6 +1447,17 @@ function applyTemplate(i){
   canvas.requestRenderAll();
   pushHistory();
   $("#props") && renderProps();
+  flashStage();
+}
+
+// キャンバスへの反映時に、さりげない登場演出を一度だけ走らせる(やりすぎない)。
+function flashStage(){
+  const shell = $("#canvasShell");
+  if (!shell) return;
+  shell.classList.remove("flash");
+  // リフローを挟んでアニメを再起動
+  void shell.offsetWidth;
+  shell.classList.add("flash");
 }
 
 /* ============================================================
@@ -1637,6 +1662,7 @@ function applyAiPlan(plan){
   canvas.requestRenderAll();
   pushHistory();
   renderProps();
+  flashStage();
 }
 
 // AI生成テキストの追加ヘルパー(中央寄せ・縦位置比で配置)。
@@ -2331,11 +2357,16 @@ function boot(){
    ============================================================ */
 const ONBOARD_KEY = "seto_onboarded";
 const ONBOARD_STEPS = [
-  { t:"テンプレートを選ぶ", d:"左の「テンプレート」からキーワード検索やカテゴリで絞り込み、好きなデザインを選んでキャンバスに展開します。文言から作るなら「AI生成」も使えます。" },
-  { t:"文字を変える", d:"キャンバス上の文字をダブルクリック、または右パネルの「テキスト」欄で内容を書き換えます。" },
-  { t:"色と書体を選ぶ", d:"右パネルで糸色・文字色・書体・サイズを調整できます。織りは糸色見本帳から選べます。" },
-  { t:"仕上がりを確認", d:"上部の「プレビュー」で、シャツやワッペンに付いた使われ方の仕上がりイメージを確認できます。" },
-  { t:"入稿する", d:"「入稿する」で寸法・色・プリフライト(製造可否)を確認し、瀬戸社の受注画面に届けます。" },
+  { t:"テンプレートを選ぶ", d:"左の「テンプレート」からキーワード検索やカテゴリで絞り込み、好きなデザインを選んでキャンバスに展開します。文言から作るなら「AI生成」も使えます。",
+    ic:`<svg viewBox="0 0 24 24" width="24" height="24"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="3" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="13" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="13" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>` },
+  { t:"文字を変える", d:"キャンバス上の文字をダブルクリック、または右パネルの「テキスト」欄で内容を書き換えます。",
+    ic:`<svg viewBox="0 0 24 24" width="24" height="24"><path d="M5 6h14M9 6v13M15 6v13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>` },
+  { t:"色と書体を選ぶ", d:"右パネルで糸色・文字色・書体・サイズを調整できます。織りは糸色見本帳から選べます。",
+    ic:`<svg viewBox="0 0 24 24" width="24" height="24"><circle cx="9" cy="9" r="5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 14l6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="9" r="1.6" fill="currentColor"/></svg>` },
+  { t:"仕上がりを確認", d:"上部の「プレビュー」で、シャツやワッペンに付いた使われ方の仕上がりイメージを確認できます。",
+    ic:`<svg viewBox="0 0 24 24" width="24" height="24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>` },
+  { t:"入稿する", d:"「入稿する」で寸法・色・プリフライト(製造可否)を確認し、瀬戸社の受注画面に届けます。",
+    ic:`<svg viewBox="0 0 24 24" width="24" height="24"><path d="M5 12l5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
 ];
 let _onboardIdx = 0;
 
@@ -2367,6 +2398,7 @@ function renderOnboarding(){
   const last = _onboardIdx === total-1;
   back.innerHTML = `
     <div class="onboard-card" role="dialog" aria-label="使い方ガイド">
+      <div class="ob-ic">${s.ic||""}</div>
       <div class="ob-step">STEP ${_onboardIdx+1} / ${total}</div>
       <h3 class="ob-title">${esc(s.t)}</h3>
       <p class="ob-desc">${esc(s.d)}</p>
