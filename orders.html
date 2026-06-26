@@ -54,6 +54,10 @@ body{overflow:auto;display:block}
 .ord-card.is-new{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft),var(--shadow-md)}
 /* プリフライト不可の受注は警告枠 */
 .ord-card.is-fail{border-color:#f2c0bb}
+/* 見積依頼(新規・要対応)は左に強調帯 */
+.ord-card.is-req{border-left:4px solid var(--accent)}
+/* 差し戻し中は左に赤帯 */
+.ord-card.is-rework{border-left:4px solid #bf2f26}
 @keyframes ordPop{0%{transform:translateY(10px);opacity:0}100%{transform:translateY(0);opacity:1}}
 .ord-card.pop{animation:ordPop .35s ease}
 
@@ -77,6 +81,37 @@ body{overflow:auto;display:block}
 .oc-badge.b-warn{background:#fdf3e2;border-color:#f0d6a6;color:#9a6b16}
 .oc-badge.b-fail{background:#fdecea;border-color:#f2c0bb;color:#bf2f26}
 .oc-badge.b-new{background:var(--accent);border-color:var(--accent);color:#fff}
+/* ステータスのバッジ(色分け) */
+.oc-badge.s-req{background:var(--accent-soft);border-color:#ecdcba;color:var(--accent-deep)}
+.oc-badge.s-rework{background:#fdecea;border-color:#f2c0bb;color:#bf2f26}
+.oc-badge.s-quote{background:#e7f0ff;border-color:#bcd2f0;color:#2a5fa8}
+.oc-badge.s-approved{background:#eef7ec;border-color:#c2e0c5;color:#3a8a4a}
+.oc-badge.s-prod{background:#e3eefb;border-color:#bcd2f0;color:#2a5fa8}
+.oc-badge.s-done{background:#eaf6ec;border-color:#bcdcc2;color:#2c7a3e}
+
+/* 数量の最小ロット未満フラグ */
+.lot-flag{font-size:9.5px;font-weight:700;color:#9a6b16;background:#fdf3e2;border:1px solid #f0d6a6;border-radius:5px;padding:1px 6px;margin-left:6px}
+
+/* 要望・概算・確定見積・差し戻し理由ブロック */
+.oc-memo,.oc-est,.oc-quote,.oc-reworkreason{margin:0 14px 10px;border-radius:9px;padding:9px 11px;font-size:11.5px;line-height:1.6}
+.oc-memo{background:var(--surface-2);border:1px solid var(--line);color:var(--ink-soft)}
+.oc-memo b,.oc-est b,.oc-quote b,.oc-reworkreason b{display:inline-block;margin-right:6px;color:var(--ink)}
+.oc-est{background:var(--accent-soft);border:1px solid #ecdcba;color:var(--accent-deep)}
+.oc-est b{color:var(--accent-deep)}
+.oc-quote{background:#e7f0ff;border:1px solid #bcd2f0;color:#2a5fa8}
+.oc-quote b{color:#2a5fa8}
+.oc-quote .oq-note{display:block;margin-top:4px;color:var(--ink-soft)}
+.oc-reworkreason{background:#fdecea;border:1px solid #f2c0bb;color:#bf2f26}
+.oc-reworkreason b{color:#bf2f26}
+
+/* 状態履歴(タイムライン) */
+.oc-timeline{margin:0 14px 10px;font-size:11px}
+.oc-timeline summary{cursor:pointer;color:var(--ink-soft);font-weight:600;padding:4px 0}
+.oc-timeline ul{margin:6px 0 0;padding-left:0;list-style:none}
+.oc-timeline li{display:flex;gap:8px;padding:3px 0;color:var(--ink-soft);line-height:1.6;border-bottom:1px solid var(--line-soft)}
+.oc-timeline li:last-child{border-bottom:none}
+.oc-timeline .tl-at{flex:0 0 70px;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+.oc-timeline .tl-by{flex:0 0 42px;color:var(--accent-deep);font-weight:600}
 
 /* 確定仕様シート(カード内) */
 .oc-spec{padding:13px 14px 4px;font-size:12px}
@@ -93,18 +128,10 @@ body{overflow:auto;display:block}
 .oc-fail-note ul{margin:6px 0 0;padding-left:16px}
 .oc-fail-note li{margin:2px 0}
 
-/* ステータスのピル(クリックで遷移) */
-.oc-foot{display:flex;align-items:center;gap:10px;padding:11px 14px 14px;border-top:1px solid var(--line-soft);margin-top:6px}
-.oc-status-label{font-size:11px;color:var(--ink-faint)}
-.status-pill{
-  cursor:pointer;border:none;font-weight:700;font-size:12px;
-  padding:7px 16px;border-radius:20px;transition:all .14s;
-}
-.status-pill.s-new{background:var(--accent-soft);color:var(--accent-deep)}
-.status-pill.s-prod{background:#e3eefb;color:#2a5fa8}
-.status-pill.s-done{background:#eaf6ec;color:#2c7a3e}
-.status-pill:hover{filter:brightness(.96);box-shadow:var(--shadow-sm)}
-.oc-status-hint{font-size:10px;color:var(--ink-faint);margin-left:auto}
+/* アクションフッタ(瀬戸社の操作ボタン群) */
+.oc-foot{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:12px 14px 14px;border-top:1px solid var(--line-soft);margin-top:6px}
+.oc-foot .text-btn{padding:8px 14px;font-size:12px}
+.oc-wait{font-size:11.5px;color:var(--ink-faint);line-height:1.5}
 
 /* 空状態 */
 .ord-empty{
@@ -163,7 +190,13 @@ body{overflow:auto;display:block}
 
   <!-- 二画面デモの説明 -->
   <div class="ord-howto">
-    <b>二画面で「飛ぶ」体験を見せるには</b>: このページを開いたまま、別タブ(または別ウィンドウ)でエディタ(index.html)を開き、デザインを作って「入稿する」を確定してください。入稿した瞬間に、こちら側に受注カードが新着で増えます。二画面を並べられない場合は、上の「デモ用サンプル投入」で受注カードを生成してこの画面単体でもデモできます。
+    <b>見積もり起点の受注フロー</b>: 顧客がエディタ(index.html)で「見積もり依頼」を送ると、ここに「見積依頼」カードが新着で届きます。瀬戸社側は<b>確定見積を提示</b>(価格・納期・一言)するか<b>差し戻し</b>(理由を入力)します。顧客が見積もりを<b>承認</b>すると「承認済み(生産着手)」になり、以降<b>生産中</b>から<b>完了</b>へ進められます(承認前は生産に進めません)。
+    <ol>
+      <li>このページを開いたまま、別タブでエディタを開き「見積もり依頼」を送る。</li>
+      <li>届いた「見積依頼」で「確定見積を提示」または「差し戻し」。</li>
+      <li>顧客側(エディタの「見積・注文状況」)で承認 → 「生産中」から「完了」へ。</li>
+    </ol>
+    二画面を並べられない場合は、上の「デモ用サンプル投入」で各状態のサンプル(見積依頼・差し戻し・見積提示・生産中)を生成してこの画面単体でもデモできます。
   </div>
 
   <!-- 受注カード一覧(新着順) -->
@@ -177,7 +210,7 @@ body{overflow:auto;display:block}
 
   <!-- 本番像の注記(後日実装) -->
   <p class="ord-future">
-    <b>本番像(後日実装)</b>: 顧客のマイページ認証、瀬戸社の受注管理・生産連携(工程ステータス・割付・進捗)、印刷完全データ生成(織りの紋紙・ドビーデータ / 印刷の CMYK 分版・トンボ・断ち落とし)、決済、顧客・社内への通知。本コンセプトではこれらを範囲外とし、入稿が相手アプリに届いて見える一連の流れの成立を最優先にしています。
+    <b>本番像(後日実装)</b>: 顧客のマイページ認証、瀬戸社の受注管理・生産連携(工程ステータス・割付・進捗)、実価格表に基づく見積もり算定・受発注 API・決済、印刷完全データ生成(織りの紋紙・ドビーデータ / 印刷の CMYK 分版・トンボ・断ち落とし)、顧客・社内への通知。本コンセプトではこれらを範囲外とし、見積依頼から差し戻し・承認・生産までの一連の往復が相手アプリに届いて見える流れの成立を最優先にしています。概算・確定見積の金額は仮値[要確認]です。
   </p>
 
 </div>

@@ -51,9 +51,13 @@ if (!window.fabric) {
       <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span class="btn-label">ダウンロード</span>
     </button>
-    <button class="text-btn primary" id="orderBtn" title="寸法・色・プリフライトを確認して入稿(瀬戸社の受注画面へ)">
+    <button class="text-btn" id="myOrdersBtn" title="自分の見積もり依頼と注文状況(見積提示・差し戻し・承認・生産)を確認する">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path d="M5 4h11l3 3v13H5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 11h8M8 14h8M8 17h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span class="btn-label">見積・注文状況</span>
+    </button>
+    <button class="text-btn primary" id="orderBtn" title="寸法・色・プリフライトを確認し、数量と要望を添えて見積もりを依頼(瀬戸社の受注画面へ)">
       <svg viewBox="0 0 24 24" width="16" height="16"><path d="M5 12l5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span class="btn-label">入稿する</span>
+      <span class="btn-label">見積もり依頼</span>
     </button>
     <a class="text-btn nav-link" href="orders.html" target="_blank" rel="noopener" title="瀬戸社側の受注キャッチ画面を別タブで開く">
       <svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 5h16v14H4z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 9h16" stroke="currentColor" stroke-width="1.8"/><path d="M8 13h8M8 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -102,17 +106,31 @@ if (!window.fabric) {
   </aside>
 </div>
 
-<!-- 入稿モーダル -->
+<!-- 見積もり依頼モーダル -->
 <div class="modal-back" id="orderModal" hidden>
   <div class="modal">
     <div class="modal-head">
-      <h3>入稿スペック確認</h3>
+      <h3>見積もり依頼</h3>
       <button class="icon-btn" id="orderClose"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
     <div class="modal-body" id="orderBody"></div>
     <div class="modal-foot">
-      <span class="modal-note">本番ではここから印刷完全データ生成・マイページ認証・瀬戸様の受発注連携・決済(プレミアム1,980円/月)へ進みます。</span>
-      <button class="text-btn primary" id="orderConfirm">この内容で入稿(デモ)</button>
+      <span class="modal-note">概算[要確認]を確認のうえ見積もりを依頼します。最終価格・納期は瀬戸様が確定見積で確定します。本番はマイページ認証・受発注 API・決済(プレミアム1,980円/月)へ。</span>
+      <button class="text-btn primary" id="orderConfirm">この内容で見積もりを依頼</button>
+    </div>
+  </div>
+</div>
+
+<!-- 見積・注文状況モーダル(顧客側。自分の依頼一覧と状態) -->
+<div class="modal-back" id="myOrdersModal" hidden>
+  <div class="modal myorders-modal">
+    <div class="modal-head">
+      <h3>見積・注文状況</h3>
+      <button class="icon-btn" id="myOrdersClose"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="modal-body" id="myOrdersBody"></div>
+    <div class="modal-foot">
+      <span class="modal-note">このブラウザから依頼した見積もり・注文の状況です(コンセプトデモ。実データは localStorage キー "seto_orders")。瀬戸様が見積提示・差し戻し・承認後の生産進行を行います。</span>
     </div>
   </div>
 </div>

@@ -177,6 +177,124 @@ const PF = {
   // 金属(金銀)の近似判定はスウォッチの metal フラグを正とし、色味近似は補助
 };
 
+/* ============================================================
+   1c. 概算見積もり仮係数(すべて[要確認]= 瀬戸社確定価格表で差し替え前提)
+   ------------------------------------------------------------
+   実価格・実係数は瀬戸社の価格表が正であり、ここはあくまで顧客に
+   「概算レンジ」を見せて期待値を合わせるための仮の定数。最終価格・納期は
+   瀬戸様が確定見積で確定する(顧客側エディタでは確定しない)。PF と同様に
+   1か所に集約し、本番は価格表/受発注 API へ差し替える。金額は円。
+   ============================================================ */
+const EST = {
+  // 品目別の基準単価(1枚あたり円、標準仕様・標準サイズ前提の仮値)[要確認]
+  basePrice: {
+    woven_name: 60, print_name: 45, iron_name: 40,
+    embroidery_wappen: 220, woven_wappen: 180, print_wappen: 120,
+  },
+  // 品目別の基準納期日数(下限・上限の中央値の目安。leadTime 表記の数値化)[要確認]
+  baseLeadDays: {
+    woven_name: 28, print_name: 10, iron_name: 14,
+    embroidery_wappen: 21, woven_wappen: 24, print_wappen: 14,
+  },
+  // 数量による単価逓減(段階表現)。閾値以上で base にこの係数を掛ける[要確認]
+  qtyTiers: [
+    { min: 1,    priceMul: 1.0,  label: "小ロット" },
+    { min: 100,  priceMul: 0.85, label: "標準" },
+    { min: 300,  priceMul: 0.72, label: "中ロット" },
+    { min: 1000, priceMul: 0.60, label: "大ロット" },
+    { min: 3000, priceMul: 0.50, label: "量産" },
+  ],
+  // 概算レンジ幅(下限・上限を中心値から ±この割合)[要確認]
+  priceSpread: 0.18,
+  leadSpread: 0.20,
+  // サイズ係数の基準。面積(mm2)がこの基準を超えると面積比で割増[要確認]
+  refAreaMm2: { name: 18*70, wappen: 65*65 },
+  sizeMaxMul: 1.8,   // サイズ割増の上限
+  // 複雑さ係数: 要素数・色数・画像の重み[要確認]
+  perElement: 0.05,  // 要素1点ごとの割増
+  perColorOver: 0.08,// 色数が基準(品目の色数ガイド)を超えた1色ごとの割増
+  imageMul: 0.20,    // 画像を含む場合の割増(版起こし相当)
+  complexMax: 0.9,   // 複雑さ割増の上限
+  // ギミック係数: 仕立て・メロー・金銀糸[要確認]
+  foldingMul: {
+    roll: 0, endfold: 0.06, centerfold: 0.05, bookcover: 0.10,
+    manhattan: 0.10, heatcut: 0.03, mello: 0.12, diecut: 0.15,
+  },
+  metalMul: 0.20,    // 金糸・銀糸使用時の割増
+  // 複雑さ・ギミックは納期にも効く(係数 x この割合を納期割増へ)[要確認]
+  leadComplexFactor: 0.5,
+  // 最小ロット未満でも概算は出すが、注意表示する(発注可否は瀬戸様判断)
+};
+
+// 数量に応じた単価逓減ティアを返す
+function qtyTier(qty){
+  let t = EST.qtyTiers[0];
+  for (const tier of EST.qtyTiers){ if (qty >= tier.min) t = tier; }
+  return t;
+}
+
+/* 概算見積もりレンジ(価格・納期)を算出する。
+   価格 = 基準単価 x 数量ティア係数 x (1 + サイズ割増 + 複雑さ割増 + ギミック割増) x 数量。
+   納期 = 基準納期日数 x (1 + 複雑さ・ギミックの一部) を下限上限レンジに。
+   算定根拠(basis 配列)も返し、UI で「何で増減したか」を見せる。
+   すべて概算[要確認]であり、最終は瀬戸様が確定見積で確定する。 */
+function estimateRange(qty){
+  const p = curProduct();
+  const d = curDim();
+  const objs = canvas ? canvas.getObjects() : [];
+  const q = Math.max(1, Math.floor(qty || p.minLot || 1));
+  const basis = [];
+
+  const base = EST.basePrice[state.product] || 60;
+  const tier = qtyTier(q);
+  basis.push(`基準単価 約 ${base} 円 x 数量 ${q} 枚(${tier.label}単価 x${tier.priceMul})[要確認]`);
+
+  // サイズ係数(面積比。基準超で割増、上限あり)
+  const area = d.w * d.h;
+  const refArea = p.kind === "name" ? EST.refAreaMm2.name : EST.refAreaMm2.wappen;
+  let sizeMul = 1;
+  if (area > refArea){
+    sizeMul = Math.min(EST.sizeMaxMul, 1 + (area / refArea - 1) * 0.6);
+    basis.push(`サイズ ${d.w} x ${d.h} mm が基準(約 ${refArea} mm2)より大きく x${sizeMul.toFixed(2)}`);
+  } else {
+    basis.push(`サイズ ${d.w} x ${d.h} mm(基準内)`);
+  }
+
+  // 複雑さ係数(要素数・色数・画像)
+  const fg = canvas ? collectColors(objs).filter(c=>toHex(c)!==toHex(state.fabric)) : [];
+  const colorGuide = p.monThreadGuide || 2;
+  const hasImage = objs.some(o=>o.type==="image");
+  let complex = objs.length * EST.perElement;
+  if (fg.length > colorGuide) complex += (fg.length - colorGuide) * EST.perColorOver;
+  if (hasImage) complex += EST.imageMul;
+  complex = Math.min(EST.complexMax, complex);
+  basis.push(`複雑さ: 要素 ${objs.length} 点 / 色 ${fg.length} 色${hasImage?" / 画像あり":""}(割増 +${(complex*100).toFixed(0)}%)`);
+
+  // ギミック係数(仕立て・金銀糸)
+  let gimmick = EST.foldingMul[state.folding] || 0;
+  const usesMetal = fg.some(c=>isMetalColor(c));
+  if (usesMetal) gimmick += EST.metalMul;
+  const foldLabel = (FOLDING[state.folding]||{}).label || "-";
+  basis.push(`ギミック: 仕立て「${foldLabel}」${usesMetal?" / 金銀糸あり":""}(割増 +${(gimmick*100).toFixed(0)}%)`);
+
+  const unit = base * tier.priceMul * sizeMul * (1 + complex + gimmick);
+  const total = unit * q;
+  const priceMin = Math.round(total * (1 - EST.priceSpread) / 100) * 100;
+  const priceMax = Math.round(total * (1 + EST.priceSpread) / 100) * 100;
+
+  // 納期(基準日数 x 複雑さギミックの一部 + 数量大なら微増)
+  const leadBase = EST.baseLeadDays[state.product] || 14;
+  const leadComplex = (complex + gimmick) * EST.leadComplexFactor;
+  const qtyLeadAdd = q >= 1000 ? 0.25 : (q >= 300 ? 0.12 : 0);
+  const leadMid = leadBase * (1 + leadComplex + qtyLeadAdd);
+  const leadMin = Math.max(1, Math.round(leadMid * (1 - EST.leadSpread)));
+  const leadMax = Math.round(leadMid * (1 + EST.leadSpread));
+  basis.push(`納期 基準 約 ${leadBase} 日 x 複雑さギミック・数量(${leadMin} から ${leadMax} 日)[要確認]`);
+
+  const belowLot = q < (p.minLot || 1);
+  return { qty: q, priceMin, priceMax, leadMin, leadMax, basis, belowLot, minLot: p.minLot };
+}
+
 // 書体一覧(織りに向く明朝/ゴシック中心 + 装飾)
 const FONTS = [
   { css: "'Shippori Mincho', serif",   name: "しっぽり明朝", sample: "瀬戸 織" },
@@ -208,6 +326,8 @@ const state = {
   tplQuery: "",           // テンプレート検索キーワード(name/category/tags を部分一致)
   // AI生成(デモ版)の入力状態。renderRail をまたいで保持する。
   ai: { text: "", mood: "modern", candidates: [], chosen: -1 },
+  // 見積もり依頼モーダルの入力状態(数量・要望メモ)。openOrder の都度プリセット。
+  order: { quantity: 0, memo: "", customer: "" },
 };
 
 let canvas;                 // fabric.Canvas
@@ -215,6 +335,8 @@ let history = [];           // Undo/Redo スナップショット
 let histIdx = -1;
 let suppressHistory = false;
 let activeRail = "templates";
+// 差し戻しからの再依頼の対象 ID(再編集中のレコード)。null なら新規依頼。
+let reworkTargetId = null;
 
 /* ============================================================
    3. ユーティリティ
@@ -495,7 +617,7 @@ function updateStageFoot(){
   const lab = pf.level==="fail"?"不可":(pf.level==="warn"?"注意":"合格");
   specs.push(`<span class="dim-pill pf-pill ${cls}" id="footPf" title="クリックで詳細">プリフライト <b>${lab}</b></span>`);
   $("#stageFoot").innerHTML = specs.join("");
-  const fp = $("#footPf"); if (fp) fp.onclick = openOrder;
+  const fp = $("#footPf"); if (fp) fp.onclick = ()=>{ reworkTargetId=null; openOrder(); };
 }
 
 /* ============================================================
@@ -2160,17 +2282,67 @@ function openOrder(){
     pfHtml+=`<p class="pf-none">指摘はありません。物理仕様の自動判定上は問題なしです。</p>`;
   }
 
+  // 数量の初期値(最小ロットを既定値に)。再オープン時は前回入力を保持。
+  if (!state.order.quantity) state.order.quantity = p.minLot || 1;
+
   $("#orderBody").innerHTML=
     `<div class="pf-block">${pfHtml}</div>`+
     `<h4 class="spec-h">確定仕様シート</h4>`+
     `<table class="spec-table">${rows}</table>`+
-    `<div class="field" style="margin-top:16px"><label>お名前 / 会社名(任意。受注画面に表示します)</label>`+
-    `<input type="text" id="customerName" placeholder="例: 株式会社サンプル / 山田太郎"></div>`+
-    `<p class="spec-note">この内容で入稿すると、瀬戸社側の受注キャッチ画面(orders.html)に新着で届きます(コンセプトデモ。実データ連携は localStorage で擬似)。各仕様値・プリフライト閾値は瀬戸社確認待ち[要確認]の項目を含みます。</p>`;
-  // 不可がある場合は入稿ボタンを抑止(デモ)
+    `<h4 class="spec-h">数量と要望</h4>`+
+    `<div class="field-row" style="margin-top:4px">`+
+      `<div class="field" style="flex:0 0 150px"><label>数量(枚。最小ロット ${p.minLot} 枚)</label>`+
+        `<input type="number" id="orderQty" min="1" step="1" value="${state.order.quantity}" inputmode="numeric"></div>`+
+      `<div class="field" style="flex:1"><label>お名前 / 会社名(任意。受注画面に表示)</label>`+
+        `<input type="text" id="customerName" value="${esc(state.order.customer||"")}" placeholder="例: 株式会社サンプル / 山田太郎"></div>`+
+    `</div>`+
+    `<div id="lotWarn"></div>`+
+    `<div class="field"><label>ご要望メモ(自由記述。納期希望・用途・色味の指定など)</label>`+
+      `<textarea id="orderMemo" placeholder="例: 入学式に間に合わせたい。紅はもう少し落ち着いた色味で。">${esc(state.order.memo||"")}</textarea></div>`+
+    `<h4 class="spec-h">概算お見積もり<span class="est-flag">概算[要確認]</span></h4>`+
+    `<div id="estBox"></div>`+
+    `<p class="spec-note">概算は数量・サイズ・複雑さ・ギミックから自動算出した目安です。実価格・係数は仮値[要確認]で、最終価格・納期は瀬戸様が確定見積で確定します。見積もりを依頼すると瀬戸社側(orders.html)に「見積依頼」として届きます。</p>`;
+
+  // 数量・メモの入力で概算を即時更新し、state に保持する
+  const qtyEl = $("#orderQty"), memoEl = $("#orderMemo"), custEl = $("#customerName");
+  const syncEst = ()=>{
+    let q = parseInt(qtyEl.value, 10);
+    if (!Number.isFinite(q) || q < 1) q = 1;
+    state.order.quantity = q;
+    state.order.memo = memoEl ? memoEl.value : "";
+    state.order.customer = custEl ? custEl.value : "";
+    renderEstBox();
+  };
+  if (qtyEl) qtyEl.oninput = syncEst;
+  if (memoEl) memoEl.oninput = ()=>{ state.order.memo = memoEl.value; };
+  if (custEl) custEl.oninput = ()=>{ state.order.customer = custEl.value; };
+  renderEstBox();
+
+  // 不可がある場合は依頼ボタンを抑止(デモ)
   const cf=$("#orderConfirm");
-  if (cf){ cf.disabled = (pf.level==="fail"); cf.textContent = pf.level==="fail" ? "修正が必要です" : "この内容で入稿(デモ)"; }
+  if (cf){ cf.disabled = (pf.level==="fail"); cf.textContent = pf.level==="fail" ? "修正が必要です" : "この内容で見積もりを依頼"; }
   $("#orderModal").hidden=false;
+}
+
+// 概算ボックスとロット注意の再描画(数量入力でライブ更新)。
+function renderEstBox(){
+  const box = $("#estBox"); if (!box) return;
+  const est = estimateRange(state.order.quantity);
+  const yen = n => n.toLocaleString("ja-JP");
+  box.innerHTML =
+    `<div class="est-range">`+
+      `<div class="est-cell"><span class="est-k">概算価格(総額)</span><span class="est-v">${yen(est.priceMin)} 円 から ${yen(est.priceMax)} 円</span></div>`+
+      `<div class="est-cell"><span class="est-k">概算納期</span><span class="est-v">約 ${est.leadMin} 日 から ${est.leadMax} 日</span></div>`+
+    `</div>`+
+    `<details class="est-basis"><summary>算定根拠を見る</summary><ul>`+
+      est.basis.map(b=>`<li>${esc(b)}</li>`).join("")+
+    `</ul></details>`;
+  const lw = $("#lotWarn");
+  if (lw){
+    lw.innerHTML = est.belowLot
+      ? `<div class="lot-warn">数量 ${est.qty} 枚は最小ロット ${est.minLot} 枚を下回ります。少量対応の可否・割増は瀬戸様の確定見積でご案内します。[要確認]</div>`
+      : "";
+  }
 }
 
 /* ============================================================
@@ -2207,15 +2379,30 @@ function buildOrderRecord(){
   const pf = runPreflight();
   // 顧客名: エディタに簡易入力欄があれば採用、無ければデモ顧客+連番
   const orders = loadOrders();
-  let customer = "デモ顧客";
-  const ci = $("#customerName");
-  if (ci && ci.value.trim()) customer = ci.value.trim();
-  else customer = "デモ顧客 " + (orders.length + 1);
+  let customer = (state.order.customer||"").trim();
+  if (!customer) customer = "デモ顧客 " + (orders.length + 1);
+
+  const qty = Math.max(1, Math.floor(state.order.quantity || p.minLot || 1));
+  const est = estimateRange(qty);
+  const memo = (state.order.memo||"").trim();
+  const nowIso = new Date().toISOString();
 
   return {
     id: "ord_" + Date.now() + "_" + Math.floor(Math.random()*1e4),
-    createdAt: new Date().toISOString(),
+    createdAt: nowIso,
     customer,
+    // 新フロー: 数量・要望・概算・確定見積・差し戻し理由・再編集用デザイン・状態履歴
+    quantity: qty,
+    memo,
+    estimate: {
+      priceMin: est.priceMin, priceMax: est.priceMax,
+      leadMin: est.leadMin, leadMax: est.leadMax,
+      basis: est.basis, belowLot: est.belowLot,
+    },
+    quote: null,          // 瀬戸社が確定見積で埋める {price, lead, note}
+    reworkReason: "",     // 瀬戸社が差し戻し時に埋める
+    designJson: snapshot(),   // 差し戻し時の再編集用(canvas.toJSON 相当)
+    history: [{ at: nowIso, status: "見積依頼", by: "顧客", note: "見積もりを依頼しました。" }],
     product: state.product,
     productLabel: p.label,
     widthMm: p.widths ? state.widthMm : null,
@@ -2238,22 +2425,56 @@ function buildOrderRecord(){
     leadTime: p.leadTime,
     preflight: { level: pf.level, items: pf.items.map(it=>({ level: it.level, msg: it.msg })) },
     thumb: exportPNG(1),
-    status: "新着",
+    status: "見積依頼",
   };
 }
 
-// 入稿確定: 受注レコードを localStorage に追記し、トーストと受注画面導線を出す。
+// 見積依頼の確定: 受注レコードを localStorage に追記(または再依頼で更新)し、
+// トーストと受注画面導線を出す。
 function submitOrder(){
   const rec = buildOrderRecord();
   const arr = loadOrders();
+  if (reworkTargetId){
+    // 差し戻しからの再依頼: 既存レコードを更新し、履歴を引き継いで「再依頼」を積む。
+    const idx = arr.findIndex(o=>o.id===reworkTargetId);
+    if (idx >= 0){
+      const prev = arr[idx];
+      const nowIso = new Date().toISOString();
+      const hist = Array.isArray(prev.history) ? prev.history.slice() : [];
+      hist.push({ at: nowIso, status: "見積依頼", by: "顧客", note: "差し戻しを受けて修正し、再依頼しました。" });
+      arr[idx] = {
+        ...prev,
+        quantity: rec.quantity, memo: rec.memo, estimate: rec.estimate,
+        designJson: rec.designJson, thumb: rec.thumb, preflight: rec.preflight,
+        // 仕様も最新のデザインに合わせて差し替え
+        product: rec.product, productLabel: rec.productLabel,
+        widthMm: rec.widthMm, lengthMm: rec.lengthMm, dimW: rec.dimW, dimH: rec.dimH,
+        isName: rec.isName, folding: rec.folding, foldingLabel: rec.foldingLabel,
+        weave: rec.weave, weaveLabel: rec.weaveLabel,
+        emblem: rec.emblem, emblemLabel: rec.emblemLabel, mello: rec.mello,
+        fabricHex: rec.fabricHex, fabricName: rec.fabricName,
+        threads: rec.threads, colorCount: rec.colorCount,
+        attach: rec.attach, minLot: rec.minLot, leadTime: rec.leadTime,
+        reworkReason: "", status: "見積依頼", history: hist,
+        reRequestedAt: nowIso,
+      };
+      saveOrders(arr);
+      reworkTargetId = null;
+      $("#orderModal").hidden = true;
+      showOrderToast("再依頼を送信しました(デモ)。瀬戸社側で再度見積もりされます。");
+      return;
+    }
+    // 対象が見つからなければ新規扱いにフォールバック
+    reworkTargetId = null;
+  }
   arr.unshift(rec);          // newest 優先
   saveOrders(arr);
   $("#orderModal").hidden = true;
-  showOrderToast();
+  showOrderToast("見積もりを依頼しました(デモ)。瀬戸社側に「見積依頼」として届きます。");
 }
 
-// 「受注画面に届きました」トースト+受注画面リンク導線。
-function showOrderToast(){
+// トースト+受注画面リンク導線(メッセージ可変)。
+function showOrderToast(msg){
   let t = $("#orderToast");
   if (!t){
     t = document.createElement("div");
@@ -2263,11 +2484,161 @@ function showOrderToast(){
   }
   t.innerHTML =
     `<span class="ot-ic"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M5 12l5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` +
-    `<span class="ot-tx">受注画面に届きました(デモ)。瀬戸社側の受注キャッチに新着で表示されます。</span>` +
+    `<span class="ot-tx">${esc(msg || "見積もりを依頼しました(デモ)。")}</span>` +
     `<a class="ot-link" href="orders.html" target="_blank" rel="noopener">受注画面を開く</a>`;
   t.classList.add("show");
   clearTimeout(showOrderToast._tm);
   showOrderToast._tm = setTimeout(()=>{ t.classList.remove("show"); }, 6000);
+}
+
+/* ============================================================
+   13c. 見積・注文状況ビュー(顧客側)
+   自分(このブラウザ)が依頼した受注の状況を一覧表示する。
+   見積提示は「承認して生産へ」、差し戻しは「修正して再依頼」を出す。
+   ============================================================ */
+const CUST_STATUS_LABEL = {
+  "見積依頼":"見積もり依頼中", "差し戻し":"差し戻し(要修正)", "見積提示":"見積もり提示済み",
+  "承認済み(生産着手)":"承認済み・生産着手", "生産中":"生産中", "完了":"完了",
+};
+const CUST_STATUS_CLS = {
+  "見積依頼":"st-req", "差し戻し":"st-rework", "見積提示":"st-quote",
+  "承認済み(生産着手)":"st-approved", "生産中":"st-prod", "完了":"st-done",
+};
+
+function openMyOrders(){
+  renderMyOrders();
+  $("#myOrdersModal").hidden = false;
+}
+
+function renderMyOrders(){
+  const body = $("#myOrdersBody"); if (!body) return;
+  const orders = loadOrders();
+  if (!orders.length){
+    body.innerHTML = `<div class="empty-hint">まだ依頼はありません。デザインを作って「見積もり依頼」を押すと、ここに状況が表示されます。</div>`;
+    return;
+  }
+  const yen = n => (n==null?"-":Number(n).toLocaleString("ja-JP"));
+  body.innerHTML = orders.map(o=>{
+    const st = o.status || "見積依頼";
+    const cls = CUST_STATUS_CLS[st] || "st-req";
+    const lab = CUST_STATUS_LABEL[st] || st;
+    const est = o.estimate || {};
+    const q = o.quote;
+    // 概算 or 確定見積
+    let priceRow = "";
+    if (q && q.price != null){
+      priceRow = `<div class="mo-row"><span class="mo-k">確定見積</span><span class="mo-v"><b>${yen(q.price)} 円</b> / 納期 ${esc(q.lead||"-")}</span></div>`;
+    } else if (est.priceMin != null){
+      priceRow = `<div class="mo-row"><span class="mo-k">概算[要確認]</span><span class="mo-v">${yen(est.priceMin)} から ${yen(est.priceMax)} 円 / 約 ${est.leadMin} から ${est.leadMax} 日</span></div>`;
+    }
+    const noteRow = (q && q.note) ? `<div class="mo-note"><b>瀬戸社より</b> ${esc(q.note)}</div>` : "";
+    const reworkRow = (st==="差し戻し" && o.reworkReason) ? `<div class="mo-rework"><b>差し戻し理由</b> ${esc(o.reworkReason)}</div>` : "";
+
+    // 状態履歴(タイムライン)
+    const hist = Array.isArray(o.history) ? o.history : [];
+    const timeline = hist.length
+      ? `<details class="mo-timeline"><summary>状態履歴(${hist.length})</summary><ul>`+
+        hist.map(h=>`<li><span class="tl-at">${esc(fmtShort(h.at))}</span><span class="tl-by">${esc(h.by||"")}</span>${esc(h.note||h.status||"")}</li>`).join("")+
+        `</ul></details>` : "";
+
+    // アクション
+    let actions = "";
+    if (st === "見積提示"){
+      actions = `<button class="text-btn primary mo-approve" data-approve="${esc(o.id)}">承認して生産へ</button>`;
+    } else if (st === "差し戻し"){
+      actions = `<button class="text-btn mo-rework-btn" data-rework="${esc(o.id)}">このデザインを修正して再依頼</button>`;
+    }
+
+    return `<div class="mo-card">
+      <div class="mo-top">
+        <div class="mo-thumb">${o.thumb?`<img src="${o.thumb}" alt="">`:""}</div>
+        <div class="mo-head">
+          <div class="mo-product">${esc(o.productLabel||o.product||"依頼")}</div>
+          <div class="mo-meta">数量 ${o.quantity!=null?o.quantity:"-"} 枚 / ${esc(fmtShort(o.createdAt))}</div>
+          <span class="mo-status ${cls}">${esc(lab)}</span>
+        </div>
+      </div>
+      <div class="mo-body">
+        ${priceRow}
+        ${o.memo?`<div class="mo-row"><span class="mo-k">要望</span><span class="mo-v">${esc(o.memo)}</span></div>`:""}
+        ${noteRow}
+        ${reworkRow}
+        ${timeline}
+      </div>
+      ${actions?`<div class="mo-foot">${actions}</div>`:""}
+    </div>`;
+  }).join("");
+
+  // 承認(見積提示 → 承認済み(生産着手))
+  $$("[data-approve]", body).forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.approve;
+      const arr = loadOrders();
+      const o = arr.find(x=>x.id===id);
+      if (!o) return;
+      o.status = "承認済み(生産着手)";
+      o.history = (o.history||[]).concat({ at:new Date().toISOString(), status:"承認済み(生産着手)", by:"顧客", note:"見積もりを承認し、生産着手を依頼しました。" });
+      saveOrders(arr);
+      renderMyOrders();
+      showOrderToast("承認しました(デモ)。瀬戸社側で生産に進めます。");
+    };
+  });
+
+  // 差し戻し → 修正して再依頼(デザイン復元 + モーダル遷移)
+  $$("[data-rework]", body).forEach(btn=>{
+    btn.onclick = ()=>{ startRework(btn.dataset.rework); };
+  });
+}
+
+// 差し戻されたデザインをキャンバスに復元し、見積もり依頼モーダルを開く。
+function startRework(id){
+  const arr = loadOrders();
+  const o = arr.find(x=>x.id===id);
+  if (!o){ return; }
+  // 品目・仕様を復元
+  const pr = PRODUCTS[o.product] || PRODUCTS.woven_name;
+  state.product = o.product;
+  state.widthMm = o.widthMm || (pr.widths?pr.widths[pr.defWidthIdx]:18);
+  state.lengthMm = o.lengthMm || (pr.lengthMm||30);
+  if (!pr.widths){
+    const idx = WAPPEN_PRESETS.findIndex(ps=>ps.w===o.dimW && ps.h===o.dimH);
+    state.presetIdx = idx>=0 ? idx : 1;
+  }
+  state.folding = o.folding || pr.defFolding;
+  state.weave = o.weave || (pr.defWeave||"satin");
+  state.fabric = o.fabricHex || state.fabric;
+  if (o.emblem) state.emblem = o.emblem;
+  state.mello = o.mello !== false;
+  // 見積もり依頼モーダルの入力欄を復元
+  state.order.quantity = o.quantity || pr.minLot || 1;
+  state.order.memo = o.memo || "";
+  state.order.customer = o.customer && o.customer.indexOf("デモ顧客")!==0 ? o.customer : "";
+
+  $$("#productSwitch button").forEach(b=>b.classList.toggle("active", b.dataset.prod===o.product));
+  $("#myOrdersModal").hidden = true;
+
+  // デザイン JSON を復元 → ステージ再構成 → 履歴初期化
+  const restore = ()=>{
+    rebuildStage(); renderRail(); renderProps();
+    history = [snapshot()]; histIdx = 0; updateHistButtons();
+    reworkTargetId = id;
+    openOrder();   // 概算再計算のうえ見積もり依頼モーダルを開く
+  };
+  if (o.designJson){
+    applySnapshot(o.designJson);
+    // applySnapshot は非同期(loadFromJSON)なので少し待ってから再構成
+    setTimeout(restore, 60);
+  } else {
+    restore();
+  }
+}
+
+// 短い日時表記(状態履歴・カード用)
+function fmtShort(iso){
+  try{
+    const d = new Date(iso); const p = n=>String(n).padStart(2,"0");
+    return `${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }catch(e){ return iso || "-"; }
 }
 
 /* ============================================================
@@ -2321,9 +2692,11 @@ function boot(){
   $("#zoomOut").onclick=()=>setZoom(state.zoom-0.1);
   $("#downloadBtn").onclick=download;
   $("#previewBtn").onclick=openPreview;
-  $("#orderBtn").onclick=openOrder;
+  $("#orderBtn").onclick=()=>{ reworkTargetId=null; openOrder(); };
+  const moBtn=$("#myOrdersBtn"); if (moBtn) moBtn.onclick=openMyOrders;
   $("#previewClose").onclick=()=>$("#previewModal").hidden=true;
-  $("#orderClose").onclick=()=>$("#orderModal").hidden=true;
+  $("#orderClose").onclick=()=>{ reworkTargetId=null; $("#orderModal").hidden=true; };
+  const moClose=$("#myOrdersClose"); if (moClose) moClose.onclick=()=>$("#myOrdersModal").hidden=true;
   $("#orderConfirm").onclick=submitOrder;
   $$(".modal-back").forEach(m=>m.onclick=e=>{ if(e.target===m) m.hidden=true; });
 
