@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>瀬戸織ネーム システム管理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=Noto+Serif+JP:wght@600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+<header class="admin-topbar">
+  <div>
+    <div class="eyebrow">SETO ORI / SYSTEM</div>
+    <h1>システム管理</h1>
+  </div>
+  <div class="admin-actions">
+    <span class="save-state" id="saveState">未保存</span>
+    <button class="btn secondary" id="exportBtn">設定を書き出す</button>
+    <label class="btn secondary file-btn">設定を読み込む<input type="file" id="importInput" accept="application/json" hidden></label>
+    <a class="btn" href="editor.html">エディタへ戻る</a>
+  </div>
+</header>
+
+<div class="notice">
+  <b>PoC管理画面</b>：この版は設定を同一ブラウザの localStorage に保存します。本番は認証付きDB/APIへ移行してください。
+</div>
+
+<div class="admin-shell">
+  <aside class="admin-nav">
+    <button class="nav-item active" data-view="products">商品仕様</button>
+    <button class="nav-item" data-view="preflight">プリフライト</button>
+    <button class="nav-item" data-view="estimate">価格・納期</button>
+    <button class="nav-item" data-view="templates">テンプレート</button>
+    <button class="nav-item" data-view="advanced">詳細設定</button>
+  </aside>
+  <main class="admin-main">
+    <div id="view"></div>
+  </main>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<script src="admin.js"></script>
+</body>
+</html>
